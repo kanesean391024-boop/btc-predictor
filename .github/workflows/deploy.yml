@@ -30,7 +30,9 @@ jobs:
         run: npm run build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5  # Updated to v5
+        with:
+          enablement: true  # Automatically enables Pages if disabled
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

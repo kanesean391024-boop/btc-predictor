@@ -1,9 +1,8 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth"
-import { getAnalytics } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  firebaseConfig = {
   apiKey: "AIzaSyA4tVBL8uT1TG6Ro6jxxXTEyk7i35thDd4",
   authDomain: "btc-predictor-6a9d9.firebaseapp.com",
   projectId: "btc-predictor-6a9d9",

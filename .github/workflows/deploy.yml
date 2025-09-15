@@ -24,7 +24,7 @@ jobs:
           # cache: 'npm'  # Disabled to avoid 422 errors
 
       - name: Install dependencies
-        run: npm install  # Changed from npm ci to avoid lock file requirement
+        run: npm install
 
       - name: Build
         run: npm run build

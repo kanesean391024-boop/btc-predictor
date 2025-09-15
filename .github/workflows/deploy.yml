@@ -16,17 +16,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
-          cache: 'npm'
+          # cache: 'npm'  # Disabled to avoid 422 errors
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install  # Changed from npm ci to avoid lock file requirement
+
       - name: Build
         run: npm run build
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

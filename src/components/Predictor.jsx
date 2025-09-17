@@ -1,50 +1,38 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { auth, db } from '../firebase';
-import { collection, addDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 
 const Predictor = () => {
   const [predictions, setPredictions] = useState(Array(24).fill(''));
   const [actuals, setActuals] = useState(Array(24).fill(null));
   const [differences, setDifferences] = useState(Array(24).fill(null));
   const [errorMessage, setErrorMessage] = useState('');
-  const [currentHour, setCurrentHour] = useState(new Date().getUTCHours());
 
   const fetchActuals = async () => {
     try {
-      const response = await axios.get('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=24');
-      const prices = response.data.map(candle => Math.round(parseFloat(candle[4]))); // Closing prices for last 24 hours
-      if (prices.length < 24) throw new Error('Incomplete data');
+      // Proxy to bypass CORS (temporary, replace with your own if needed)
+      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+      const response = await axios.get(`${proxyUrl}https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=24`);
+      const prices = response.data.map(candle => Math.round(parseFloat(candle[4]))); // 24 unique hourly closing prices
 
-      // Align to UTC hours (most recent hour is incomplete, so show "Pending" for current/future)
-      const now = new Date();
-      const newCurrentHour = now.getUTCHours();
-      setCurrentHour(newCurrentHour);
+      if (prices.length !== 24) throw new Error('Incomplete data');
 
-      const alignedActuals = Array(24).fill(null);
-      for (let i = 0; i < 24; i++) {
-        if (i < newCurrentHour) {
-          alignedActuals[i] = prices[i];
-        } else {
-          alignedActuals[i] = 'Pending'; // Future or current incomplete hour
-        }
-      }
-
-      setActuals(alignedActuals);
+      setActuals(prices);
       setErrorMessage('');
-      console.log('Hourly BTC prices:', alignedActuals);
+      console.log('Binance hourly prices:', prices);
     } catch (error) {
-      console.error('Fetch error:', error.message);
-      setErrorMessage(`Error: ${error.message}`);
+      console.error('Binance error:', error.message, error.response?.status);
+      setErrorMessage(`Error: ${error.message} (Status: ${error.response?.status || 'N/A'})`);
       setActuals(Array(24).fill('Error'));
     }
   };
 
   useEffect(() => {
-    if (actuals.length > 0 && actuals.every(a => typeof a === 'number' || a === 'Pending')) {
+    if (actuals.length > 0 && actuals.every(a => typeof a === 'number')) {
       const diffs = predictions.map((p, i) => {
         const predNum = parseFloat(p);
-        if (typeof actuals[i] === 'number' && predNum) {
+        if (actuals[i] && predNum) {
           return ((Math.abs(predNum - actuals[i]) / actuals[i]) * 100).toFixed(2);
         }
         return null;
@@ -56,12 +44,12 @@ const Predictor = () => {
   useEffect(() => {
     fetchActuals();
     const now = new Date();
-    const msUntilNextMinute = (60 - now.getUTCSeconds()) * 1000;
+    const msUntilNextHour = (60 - now.getUTCSeconds()) * 1000;
     const timer = setTimeout(() => {
       fetchActuals();
-      const interval = setInterval(fetchActuals, 3 * 60 * 1000); // Every 3 minutes
+      const interval = setInterval(fetchActuals, 60 * 60 * 1000); // Hourly
       return () => clearInterval(interval);
-    }, msUntilNextMinute);
+    }, msUntilNextHour);
     return () => clearTimeout(timer);
   }, []);
 
@@ -70,7 +58,7 @@ const Predictor = () => {
     try {
       await addDoc(collection(db, 'predictions'), {
         userId: auth.currentUser.uid,
-        predictions: predictions.map(p => parseInt(p) || 0),
+        predictions: predictions.map(p => parseInt(p) or 0),
         actuals,
         date: new Date().toISOString().split('T')[0],
         submittedAt: new Date(),
@@ -81,45 +69,10 @@ const Predictor = () => {
     }
   };
 
-  const tallyScores = async () => {
-    if (!auth.currentUser) return;
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const q = query(collection(db, 'predictions'), where('userId', '==', auth.currentUser.uid), where('date', '==', today));
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) return;
-
-      const predictionData = snapshot.docs[0].data();
-      const points = predictionData.predictions.reduce((sum, pred, i) => {
-        if (typeof predictionData.actuals[i] === 'number') {
-          const diff = Math.abs(pred - predictionData.actuals[i]) / predictionData.actuals[i] * 100;
-          return sum + (diff <= 1 ? 10 : diff <= 2 ? 5 : diff <= 5 ? 2 : 0);
-        }
-        return sum;
-      }, 0);
-
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const userDoc = await getDoc(userRef);
-      const currentPoints = userDoc.data().points || 0;
-      await updateDoc(userRef, { points: currentPoints + points });
-      alert(`Daily scores tallied: +${points} points!`);
-    } catch (error) {
-      console.error('Tally error:', error);
-      alert('Failed to tally scores');
-    }
-  };
-
-  useEffect(() => {
-    const now = new Date();
-    const msUntilNextDay = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 3, 0).getTime() - now.getTime();
-    const dailyTallyTimer = setTimeout(tallyScores, msUntilNextDay);
-    return () => clearTimeout(dailyTallyTimer);
-  }, []);
-
   return (
     <div>
       <h2>Bitcoin Hourly Price Predictor (UTC)</h2>
-      <p>Prices for {new Date().toISOString().split('T')[0]} (UTC). Future hours: Pending. Tally at midnight UTC.</p>
+      <p>Prices for {new Date().toISOString().split('T')[0]} (UTC). Updates hourly.</p>
       {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
@@ -146,7 +99,6 @@ const Predictor = () => {
                     setPredictions(newPreds);
                   }}
                   min="0"
-                  disabled={i >= currentHour} // Disable for future hours
                   style={{ width: '100px' }}
                 />
               </td>

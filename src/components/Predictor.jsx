@@ -10,15 +10,20 @@ const Predictor = () => {
   const [errorMessage, setErrorMessage] = useState(''); // For debugging
 
   // Fetch BTC hourly prices from CoinGecko
-  const fetchActuals = async () => {
-    try {
-      // Try primary endpoint (hourly data)
-      const response = await axios.get('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly');
-      let prices = response.data.prices; // [timestamp_ms, price]
-
-      if (!prices || prices.length === 0) {
-        throw new Error('Empty or invalid response from CoinGecko');
-      }
+ const fetchActuals = async () => {
+  try {
+    const response = await axios.get('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=24');
+    const prices = response.data.map(candle => Math.round(parseFloat(candle[4]))); // Closing prices
+    if (prices.length !== 24) throw new Error('Incomplete Binance data');
+    setActuals(prices);
+    setErrorMessage('');
+    console.log('Binance prices:', prices);
+  } catch (error) {
+    console.error('Binance error:', error.message);
+    setErrorMessage(`Error: ${error.message}`);
+    setActuals(Array(24).fill('Error'));
+  }
+};
 
       // Get current UTC time, align to last 24 full hours
       const now = new Date();

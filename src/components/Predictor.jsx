@@ -12,19 +12,22 @@ const Predictor = () => {
 
   const fetchActuals = async () => {
     try {
-      const response = await axios.get('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=24');
-      const prices = response.data.map(candle => Math.round(parseFloat(candle[4])));
+      // Use the CoinGecko API to fetch historical data for the last 24 hours (1440 minutes)
+      const response = await axios.get('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly');
+      
+      // CoinGecko's response is an array of [timestamp, price] pairs
+      const prices = response.data.prices.map(item => Math.round(item[1]));
 
-      if (prices.length !== 24) throw new Error('Incomplete data');
+      if (prices.length < 24) throw new Error('Incomplete data from CoinGecko');
 
       const now = new Date();
       const newCurrentHour = now.getUTCHours();
       setCurrentHour(newCurrentHour);
 
       const alignedActuals = Array(24).fill('Pending');
-      // The Binance API returns the last 24 completed hours.
-      // We need to slice the array to get the prices for the completed hours today (00:00 to currentHour-1).
-      const recentPrices = prices.slice(24 - newCurrentHour);
+      // CoinGecko returns data for the last 24 hours.
+      // We take the last `newCurrentHour` prices from the array to match today's hours.
+      const recentPrices = prices.slice(-newCurrentHour);
       
       recentPrices.forEach((price, index) => {
         alignedActuals[index] = price;
@@ -32,7 +35,7 @@ const Predictor = () => {
 
       setActuals(alignedActuals);
       setErrorMessage('');
-      console.log('Binance prices:', alignedActuals);
+      console.log('CoinGecko prices:', alignedActuals);
     } catch (error) {
       console.error('Fetch error:', error.message);
       setErrorMessage(`Error: ${error.message}`);
@@ -58,7 +61,6 @@ const Predictor = () => {
   // Effect to fetch initial data and set up an interval for updates
   useEffect(() => {
     fetchActuals();
-    // Fetch every 5 minutes to keep the data fresh for the current hour
     const interval = setInterval(fetchActuals, 5 * 60 * 1000); 
     return () => clearInterval(interval);
   }, []);
@@ -98,7 +100,7 @@ const Predictor = () => {
 
       const userRef = doc(db, 'users', auth.currentUser.uid);
       const userDoc = await getDoc(userRef);
-      const currentPoints = userDoc.data()?.points || 0; // Use optional chaining for safety
+      const currentPoints = userDoc.data()?.points || 0;
       await updateDoc(userRef, { points: currentPoints + points });
       alert(`Tally: +${points} points!`);
     } catch (error) {

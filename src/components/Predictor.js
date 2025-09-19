@@ -13,7 +13,7 @@ const Predictor = () => {
   const fetchActuals = async () => {
     try {
       const response = await axios.get('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=24');
-      const prices = response.data.map(candle => Math.round(parseFloat(candle[4]))); // 24 unique closing prices
+      const prices = response.data.map(candle => Math.round(parseFloat(candle[4])));
 
       if (prices.length !== 24) throw new Error('Incomplete data');
 
@@ -22,11 +22,13 @@ const Predictor = () => {
       setCurrentHour(newCurrentHour);
 
       const alignedActuals = Array(24).fill('Pending');
-      for (let i = 0; i < 24; i++) {
-        if (i < newCurrentHour) {
-          alignedActuals[i] = prices[prices.length - 1 - (newCurrentHour - 1 - i)]; // Align to last 24 full hours
-        }
-      }
+      // The Binance API returns the last 24 completed hours.
+      // We need to slice the array to get the prices for the completed hours today (00:00 to currentHour-1).
+      const recentPrices = prices.slice(24 - newCurrentHour);
+      
+      recentPrices.forEach((price, index) => {
+        alignedActuals[index] = price;
+      });
 
       setActuals(alignedActuals);
       setErrorMessage('');
@@ -38,12 +40,14 @@ const Predictor = () => {
     }
   };
 
+  // Effect to calculate differences whenever actuals or predictions change
   useEffect(() => {
     if (actuals.length > 0) {
       const diffs = predictions.map((p, i) => {
         const predNum = parseFloat(p);
-        if (typeof actuals[i] === 'number' && predNum) {
-          return ((Math.abs(predNum - actuals[i]) / actuals[i]) * 100).toFixed(2);
+        if (typeof actuals[i] === 'number' && !isNaN(predNum)) {
+          const diff = ((Math.abs(predNum - actuals[i]) / actuals[i]) * 100);
+          return diff.toFixed(2);
         }
         return null;
       });
@@ -51,16 +55,12 @@ const Predictor = () => {
     }
   }, [actuals, predictions]);
 
+  // Effect to fetch initial data and set up an interval for updates
   useEffect(() => {
     fetchActuals();
-    const now = new Date();
-    const msUntilNextMinute = (60 - now.getUTCSeconds()) * 1000 + (now.getUTCMinutes() % 3 === 0 ? 0 : (3 - now.getUTCMinutes() % 3) * 60 * 1000); // Every 3 min
-    const timer = setTimeout(() => {
-      fetchActuals();
-      const interval = setInterval(fetchActuals, 3 * 60 * 1000);
-      return () => clearInterval(interval);
-    }, msUntilNextMinute);
-    return () => clearTimeout(timer);
+    // Fetch every 5 minutes to keep the data fresh for the current hour
+    const interval = setInterval(fetchActuals, 5 * 60 * 1000); 
+    return () => clearInterval(interval);
   }, []);
 
   const handleSubmit = async () => {
@@ -98,7 +98,7 @@ const Predictor = () => {
 
       const userRef = doc(db, 'users', auth.currentUser.uid);
       const userDoc = await getDoc(userRef);
-      const currentPoints = userDoc.data().points || 0;
+      const currentPoints = userDoc.data()?.points || 0; // Use optional chaining for safety
       await updateDoc(userRef, { points: currentPoints + points });
       alert(`Tally: +${points} points!`);
     } catch (error) {

@@ -1,2 +1,2 @@
-# eth-predictor
-Ethereum Hourly Price Predictor Site
+# BTC-predictor
+Bitcoin Hourly Price Predictor Site

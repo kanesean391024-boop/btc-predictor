@@ -12,34 +12,9 @@ const Predictor = () => {
 
   const fetchActuals = async () => {
     try {
-      // Use the CoinGecko API to fetch historical data for the last 24 hours (1440 minutes)
-      const response = await axios.get('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1&interval=hourly');
-      
-      // CoinGecko's response is an array of [timestamp, price] pairs
-      const prices = response.data.prices.map(item => Math.round(item[1]));
-
-      if (prices.length < 24) throw new Error('Incomplete data from CoinGecko');
-
-      const now = new Date();
-      const newCurrentHour = now.getUTCHours();
-      setCurrentHour(newCurrentHour);
-
-      const alignedActuals = Array(24).fill('Pending');
-      // CoinGecko returns data for the last 24 hours.
-      // We take the last `newCurrentHour` prices from the array to match today's hours.
-      const recentPrices = prices.slice(-newCurrentHour);
-      
-      recentPrices.forEach((price, index) => {
-        alignedActuals[index] = price;
-      });
-
-      setActuals(alignedActuals);
-      setErrorMessage('');
-      console.log('CoinGecko prices:', alignedActuals);
-    } catch (error) {
-      console.error('Fetch error:', error.message);
-      setErrorMessage(`Error: ${error.message}`);
-      setActuals(Array(24).fill('Error'));
+      fetch('https://api.etherscan.io/api?module=stats&action=ethprice&apikey=9MRUV4JFCNHDRD3PS8H9U5WCYE5P7H7XNN')
+  .then(res => res.json())
+  .then(data => console.log(data.result.ethusd));
     }
   };
 
@@ -59,11 +34,11 @@ const Predictor = () => {
   }, [actuals, predictions]);
 
   // Effect to fetch initial data and set up an interval for updates
-  useEffect(() => {
-    fetchActuals();
-    const interval = setInterval(fetchActuals, 5 * 60 * 1000); 
-    return () => clearInterval(interval);
-  }, []);
+useEffect(() => {
+  fetch('https://api.etherscan.io/api?module=stats&action=ethprice&apikey=9MRUV4JFCNHDRD3PS8H9U5WCYE5P7H7XNN')
+    .then(res => res.json())
+    .then(data => setPrice(data.result.ethusd));
+}, []);
 
   const handleSubmit = async () => {
     if (!auth.currentUser) return alert('Please log in');
@@ -118,7 +93,7 @@ const Predictor = () => {
 
   return (
     <div>
-      <h2>Bitcoin Hourly Price Predictor (UTC)</h2>
+      <h2>Crypto Hourly Price Predictor (UTC)</h2>
       <p>Prices for {new Date().toISOString().split('T')[0]} (UTC). Pending for future hours. Tally at midnight UTC.</p>
       {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>

@@ -1,143 +1,124 @@
-import React, { useState, useEffect } from 'react';
+```jsx
+     import React, { useState, useEffect } from 'react';
+     import { db, auth } from '../firebase'; // Adjust path to your Firebase config
+     import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 
-const Predictor = () => {
-  const [price, setPrice] = useState(null);
+     const Predictor = () => {
+       const [price, setPrice] = useState(null);
+       const [actuals, setActuals] = useState(Array(24).fill(null));
+       const [predictions, setPredictions] = useState(Array(24).fill(''));
+       const [differences, setDifferences] = useState(Array(24).fill(null));
+       const [errorMessage, setErrorMessage] = useState('');
+       const currentHour = new Date().getUTCHours();
 
-  useEffect(() => {
-    fetch('https://api.etherscan.io/api?module=stats&action=ethprice&apikey=9MRUV4JFCNHDRD3PS8H9U5WCYE5P7H7XNN')
-      .then(res => res.json())
-      .then(data => setPrice(data.result.ethusd))
-      .catch(error => console.error('Error fetching ETH price:', error));
-  }, []); // Empty dependency array for one-time fetch
+       // Fetch ETH price hourly
+       useEffect(() => {
+         const fetchPrice = async () => {
+           try {
+             const res = await fetch(`https://api.etherscan.io/api?module=stats&action=ethprice&apikey=${process.env.REACT_APP_ETHERSCAN_API_KEY}`);
+             const data = await res.json();
+             if (data.status === '1') {
+               setPrice(data.result.ethusd);
+               setActuals(prev => {
+                 const newActuals = [...prev];
+                 newActuals[currentHour] = parseFloat(data.result.ethusd);
+                 return newActuals;
+               });
+             } else {
+               setErrorMessage('Failed to fetch ETH price');
+             }
+           } catch (error) {
+             setErrorMessage('Error fetching ETH price: ' + error.message);
+           }
+         };
 
-  return (
-    <div>
-      <h1>Ethereum Hourly Price: {price ? `$${price}` : 'Loading...'}</h1>
-    </div>
-  );
-};
+         fetchPrice();
+         const interval = setInterval(fetchPrice, 3600000); // Hourly updates
+         return () => clearInterval(interval);
+       }, [currentHour]);
 
-export default Predictor;
-  };
+       // Calculate differences
+       useEffect(() => {
+         if (actuals.some(a => a !== null)) {
+           const diffs = predictions.map((p, i) => {
+             const predNum = parseFloat(p);
+             if (typeof actuals[i] === 'number' && !isNaN(predNum)) {
+               const diff = ((Math.abs(predNum - actuals[i]) / actuals[i]) * 100);
+               return diff.toFixed(2);
+             }
+             return null;
+           });
+           setDifferences(diffs);
+         }
+       }, [actuals, predictions]);
 
-  // Effect to calculate differences whenever actuals or predictions change
-  useEffect(() => {
-    if (actuals.length > 0) {
-      const diffs = predictions.map((p, i) => {
-        const predNum = parseFloat(p);
-        if (typeof actuals[i] === 'number' && !isNaN(predNum)) {
-          const diff = ((Math.abs(predNum - actuals[i]) / actuals[i]) * 100);
-          return diff.toFixed(2);
-        }
-        return null;
-      });
-      setDifferences(diffs);
-    }
-  }, [actuals, predictions]);
+       // Submit predictions to Firebase
+       const handleSubmit = async () => {
+         if (!auth.currentUser) return alert('Please log in');
+         try {
+           await addDoc(collection(db, 'predictions'), {
+             userId: auth.currentUser.uid,
+             predictions: predictions.map(p => parseFloat(p) || 0),
+             actuals,
+             date: new Date().toISOString().split('T')[0],
+             submittedAt: new Date(),
+           });
+           alert('Predictions submitted!');
+         } catch (error) {
+           alert('Submit error: ' + error.message);
+         }
+       };
 
-  // Effect to fetch initial data and set up an interval for updates
-useEffect(() => {
-  fetch('https://api.etherscan.io/api?module=stats&action=ethprice&apikey=9MRUV4JFCNHDRD3PS8H9U5WCYE5P7H7XNN')
-    .then(res => res.json())
-    .then(data => setPrice(data.result.ethusd));
-}, []);
+       // Tally scores
+       const tallyScores = async () => {
+         if (!auth.currentUser) return;
+         try {
+           const today = new Date().toISOString().split('T')[0];
+           const q = query(collection(db, 'predictions'), where('userId', '==', auth.currentUser.uid), where('date', '==', today));
+           const snapshot = await getDocs(q);
+           if (snapshot.empty) return;
 
-  const handleSubmit = async () => {
-    if (!auth.currentUser) return alert('Please log in');
-    try {
-      await addDoc(collection(db, 'predictions'), {
-        userId: auth.currentUser.uid,
-        predictions: predictions.map(p => parseInt(p) || 0),
-        actuals,
-        date: new Date().toISOString().split('T')[0],
-        submittedAt: new Date(),
-      });
-      alert('Predictions submitted!');
-    } catch (error) {
-      alert(error.message);
-    }
-  };
+           const predictionData = snapshot.docs[0].data();
+           const points = predictionData.predictions.reduce((sum, pred, i) => {
+             if (typeof predictionData.actuals[i] === 'number') {
+               const diff = Math.abs(pred - predictionData.actuals[i]) / predictionData.actuals[i] * 100;
+               return sum + (diff <= 1 ? 10 : diff <= 2 ? 5 : diff <= 5 ? 2 : 0);
+             }
+             return sum;
+           }, 0);
 
-  const tallyScores = async () => {
-    if (!auth.currentUser) return;
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const q = query(collection(db, 'predictions'), where('userId', '==', auth.currentUser.uid), where('date', '==', today));
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) return;
+           const userRef = doc(db, 'users', auth.currentUser.uid);
+           const userDoc = await getDoc(userRef);
+           const currentPoints = userDoc.data()?.points || 0;
+           await updateDoc(userRef, { points: currentPoints + points });
+           alert(`Tally: +${points} points!`);
+         } catch (error) {
+           console.error('Tally error:', error);
+         }
+       };
 
-      const predictionData = snapshot.docs[0].data();
-      const points = predictionData.predictions.reduce((sum, pred, i) => {
-        if (typeof predictionData.actuals[i] === 'number') {
-          const diff = Math.abs(pred - predictionData.actuals[i]) / predictionData.actuals[i] * 100;
-          return sum + (diff <= 1 ? 10 : diff <= 2 ? 5 : diff <= 5 ? 2 : 0);
-        }
-        return sum;
-      }, 0);
+       // Daily tally at 00:03 UTC
+       useEffect(() => {
+         const now = new Date();
+         const msUntilNextDay = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 3, 0).getTime() - now.getTime();
+         const dailyTallyTimer = setTimeout(tallyScores, msUntilNextDay);
+         return () => clearTimeout(dailyTallyTimer);
+       }, []);
 
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const userDoc = await getDoc(userRef);
-      const currentPoints = userDoc.data()?.points || 0;
-      await updateDoc(userRef, { points: currentPoints + points });
-      alert(`Tally: +${points} points!`);
-    } catch (error) {
-      console.error('Tally error:', error);
-    }
-  };
-
-  // Daily tally at 00:03 UTC
-  useEffect(() => {
-    const now = new Date();
-    const msUntilNextDay = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 3, 0).getTime() - now.getTime();
-    const dailyTallyTimer = setTimeout(tallyScores, msUntilNextDay);
-    return () => clearTimeout(dailyTallyTimer);
-  }, []);
-
-  return (
-    <div>
-      <h2>Crypto Hourly Price Predictor (UTC)</h2>
-      <p>Prices for {new Date().toISOString().split('T')[0]} (UTC). Pending for future hours. Tally at midnight UTC.</p>
-      {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={{ border: '1px solid #ddd', padding: '8px' }}>Hour (UTC)</th>
-            <th style={{ border: '1px solid #ddd', padding: '8px' }}>Prediction (USD)</th>
-            <th style={{ border: '1px solid #ddd', padding: '8px' }}>Actual (USD)</th>
-            <th style={{ border: '1px solid #ddd', padding: '8px' }}>% Difference</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: 24 }, (_, i) => (
-            <tr key={i}>
-              <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                {i.toString().padStart(2, '0')}:00 - {(i + 1).toString().padStart(2, '0')}:00
-              </td>
-              <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                <input
-                  type="number"
-                  value={predictions[i]}
-                  onChange={(e) => {
-                    const newPreds = [...predictions];
-                    newPreds[i] = e.target.value;
-                    setPredictions(newPreds);
-                  }}
-                  min="0"
-                  disabled={i >= currentHour}
-                  style={{ width: '100px' }}
-                />
-              </td>
-              <td style={{ border: '1px solid #ddd', padding: '8px' }}>{actuals[i]}</td>
-              <td style={{ border: '1px solid #ddd', padding: '8px' }}>{differences[i] ? `${differences[i]}%` : '-'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button onClick={handleSubmit} style={{ marginTop: '10px', padding: '8px' }} disabled={actuals.some(a => a === 'Error')}>
-        Submit Predictions
-      </button>
-    </div>
-  );
-};
-
-export default Predictor;
+       return (
+         <div>
+           <h2>Ethereum Hourly Price Predictor (UTC)</h2>
+           <p>Current Price: {price ? `$${price}` : 'Loading...'}</p>
+           <p>Prices for {new Date().toISOString().split('T')[0]} (UTC). Pending for future hours. Tally at midnight UTC.</p>
+           {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
+           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+             <thead>
+               <tr>
+                 <th style={{ border: '1px solid #ddd', padding: '8px' }}>Hour (UTC)</th>
+                 <th style={{ border: '1px solid #ddd', padding: '8px' }}>Prediction (USD)</th>
+                 <th style={{ border: '1px solid #ddd', padding: '8px' }}>Actual (USD)</th>
+                 <th style={{ border: '1px solid #ddd', padding: '8px' }}>% Difference</th>
+               </tr>
+             </thead>
+             <tbody>
+               {Array.from

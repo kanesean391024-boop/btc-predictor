@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { auth, db } from '../firebase';
-import { collection, addDoc, doc, updateDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
 
 const Predictor = () => {
-  const [predictions, setPredictions] = useState(Array(24).fill(''));
-  const [actuals, setActuals] = useState(Array(24).fill('Pending'));
-  const [differences, setDifferences] = useState(Array(24).fill(null));
-  const [errorMessage, setErrorMessage] = useState('');
-  const [currentHour, setCurrentHour] = useState(new Date().getUTCHours());
+  const [price, setPrice] = useState(null);
 
-  const fetchActuals = async () => {
-    try {
-      fetch('https://api.etherscan.io/api?module=stats&action=ethprice&apikey=9MRUV4JFCNHDRD3PS8H9U5WCYE5P7H7XNN')
-  .then(res => res.json())
-  .then(data => console.log(data.result.ethusd));
-    }
+  useEffect(() => {
+    fetch('https://api.etherscan.io/api?module=stats&action=ethprice&apikey=9MRUV4JFCNHDRD3PS8H9U5WCYE5P7H7XNN')
+      .then(res => res.json())
+      .then(data => setPrice(data.result.ethusd))
+      .catch(error => console.error('Error fetching ETH price:', error));
+  }, []); // Empty dependency array for one-time fetch
+
+  return (
+    <div>
+      <h1>Ethereum Hourly Price: {price ? `$${price}` : 'Loading...'}</h1>
+    </div>
+  );
+};
+
+export default Predictor;
   };
 
   // Effect to calculate differences whenever actuals or predictions change

@@ -1,39 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db, auth } from '../firebase';
-import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 
 const Predictor = () => {
-  const [price, setPrice] = useState(null);
-  const [actuals, setActuals] = useState(Array(24).fill(null));
   const [predictions, setPredictions] = useState(Array(24).fill(''));
   const [differences, setDifferences] = useState(Array(24).fill(null));
   const [errorMessage, setErrorMessage] = useState('');
   const currentHour = new Date().getUTCHours();
-
-  useEffect(() => {
-    const fetchPrice = async () => {
-      try {
-        const res = await fetch(`https://api.etherscan.io/api?module=stats&action=ethprice&apikey=${process.env.REACT_APP_ETHERSCAN_API_KEY}`);
-        const data = await res.json();
-        if (data.status === '1') {
-          setPrice(data.result.ethusd);
-          setActuals(prev => {
-            const newActuals = [...prev];
-            newActuals[currentHour] = parseFloat(data.result.ethusd);
-            return newActuals;
-          });
-        } else {
-          setErrorMessage('Failed to fetch ETH price');
-        }
-      } catch (error) {
-        setErrorMessage('Error fetching ETH price: ' + error.message);
-      }
-    };
-
-    fetchPrice();
-    const interval = setInterval(fetchPrice, 3600000); // Hourly updates
-    return () => clearInterval(interval);
-  }, [currentHour]);
+  const staticActuals = [2650, 2655, 2660, 2658, 2662, 2665, 2670, 2668, 2665, 2660, 2655, 2650, 2645, 2640, 2635, 2640, 2645, 2650, 2655, 2660, 2665, 2670, 2668, 2665];
 
   const handlePredictionChange = (index, value) => {
     const newPredictions = [...predictions];
@@ -43,8 +17,8 @@ const Predictor = () => {
   };
 
   const updateDifferences = (index, pred) => {
-    if (actuals[index] && pred !== '') {
-      const diff = Math.abs(pred - actuals[index]) / actuals[index] * 100;
+    if (staticActuals[index] && pred !== '') {
+      const diff = Math.abs(pred - staticActuals[index]) / staticActuals[index] * 100;
       setDifferences(prev => {
         const newDiffs = [...prev];
         newDiffs[index] = diff;
@@ -58,9 +32,9 @@ const Predictor = () => {
     const today = new Date().toISOString().split('T')[0];
     await addDoc(collection(db, 'predictions'), {
       userId: auth.currentUser.uid,
-      username: (await getDoc(doc(db, 'users', auth.currentUser.uid))).data().username,
+      username: 'Anonymous', // Placeholder until username fetch is added
       predictions,
-      actuals,
+      actuals: staticActuals,
       date: today,
       submittedAt: new Date(),
     });
@@ -70,8 +44,7 @@ const Predictor = () => {
   return (
     <div>
       <h2>Ethereum Hourly Price Predictor (UTC)</h2>
-      <p>Current Price: {price ? `$${price}` : 'Loading...'}</p>
-      {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}
+      <p>Current Price: $2650 (Static for Demo)</p>
       <table>
         <thead>
           <tr>
@@ -85,7 +58,7 @@ const Predictor = () => {
           {Array(24).fill().map((_, i) => (
             <tr key={i}>
               <td>{(i + currentHour) % 24}:00</td>
-              <td>{actuals[i] ? `$${actuals[i].toFixed(2)}` : 'N/A'}</td>
+              <td>{staticActuals[i] ? `$${staticActuals[i].toFixed(2)}` : 'N/A'}</td>
               <td><input type="number" value={predictions[i]} onChange={(e) => handlePredictionChange(i, e.target.value)} placeholder="Predict" /></td>
               <td>{differences[i] !== null ? `${differences[i].toFixed(2)}%` : 'N/A'}</td>
             </tr>

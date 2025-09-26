@@ -18,7 +18,7 @@ function App() {
   if (!user) {
     return (
       <div style={{ textAlign: 'center', padding: '20px' }}>
-        <h1>Bitcoin Hourly Price Predictor</h1>
+        <h1>Crypto Hourly Price Predictor</h1>
         <Register />
         <Login />
       </div>
@@ -27,7 +27,7 @@ function App() {
 
   return (
     <div style={{ textAlign: 'center', padding: '20px' }}>
-      <h1>Bitcoin Hourly Price Predictor</h1>
+      <h1>Crypto Hourly Price Predictor</h1>
       <button onClick={() => auth.signOut()}>Logout</button>
       {view === 'predict' && <Predictor />}
       {view === 'leaderboard' && <Leaderboard />}

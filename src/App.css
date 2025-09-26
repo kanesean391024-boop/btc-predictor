@@ -1,4 +1,4 @@
-body { font-family: Arial, sans-serif; background-color: #f4f4f4; }
+body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f4f4; color: #333; }
 h1, h2 { color: #333; }
 form { max-width: 300px; margin: 20px auto; display: flex; flex-direction: column; gap: 10px; }
 input, button { padding: 8px; font-size: 16px; }
@@ -7,4 +7,3 @@ button:hover { background-color: #45a049; }
 table { margin: 20px auto; border-collapse: collapse; width: 80%; }
 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 th { background-color: #f2f2f2; }
-body { background-color: #008000; color: white; }

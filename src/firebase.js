@@ -3,13 +3,12 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA4tVBL8uT1TG6Ro6jxxXTEyk7i35thDd4",
-  authDomain: "btc-predictor-6a9d9.firebaseapp.com",
-  projectId: "btc-predictor-6a9d9",
-  storageBucket: "btc-predictor-6a9d9.firebasestorage.app",
-  messagingSenderId: "261649645889",
-  appId: "1:261649645889:web:a24d3b38675fd924fd21c0",
-  measurementId: "G-892EBKT0ZJ"
+  apiKey: "AIzaSyDaV7FKGp-PoIsozEYkiWouK9V9ydKdC60",
+  authDomain: "crypto-price-predictor-67398.firebaseapp.com",
+  projectId: "crypto-price-predictor-67398",
+  storageBucket: "crypto-price-predictor-67398.firebasestorage.app",
+  messagingSenderId: "671452740913",
+  appId: "1:671452740913:web:4c3ac6467c395f7f1f4410"
 };
 
 const app = initializeApp(firebaseConfig);

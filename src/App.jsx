@@ -4,6 +4,7 @@ import Register from './components/Register';
 import Login from './components/Login';
 import Predictor from './components/Predictor';
 import Leaderboard from './components/Leaderboard';
+import EthPriceChart from './components/eth-price-chart';
 import './App.css';
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
       <button onClick={() => auth.signOut()}>Logout</button>
       {view === 'predict' && <Predictor />}
       {view === 'leaderboard' && <Leaderboard />}
+      <EthPriceChart />
       <button onClick={() => setView(view === 'predict' ? 'leaderboard' : 'predict')}>
         {view === 'predict' ? 'View Leaderboard' : 'Make Prediction'}
       </button>
